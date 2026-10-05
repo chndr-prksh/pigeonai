@@ -1,4 +1,4 @@
-<p align="center"><img src="public/favicon.svg" width="72" alt="PigeonAI logo"></p>
+<p align="center"><a href="https://chndr-prksh.github.io/pigeonai/"><img src="public/og.png" width="820" alt="PigeonAI: market signals, delivered. Open-source NSE stock scanner."></a></p>
 
 # PigeonAI
 
