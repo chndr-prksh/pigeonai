@@ -1,183 +1,114 @@
-# NSE Stock Scanner 📈
+<p align="center"><img src="public/favicon.svg" width="72" alt="PigeonAI logo"></p>
 
-A **Python-based NSE stock scanner** that calculates **technical indicators for ~2000 NSE-listed stocks** and automatically **pushes the results to Google Sheets** for easy analysis, filtering, and discovery.
+# PigeonAI
 
-This project is designed for traders, investors, and analysts who want **centralized, always-updated technical data** without juggling multiple tools.
+**Market signals, delivered.** Live site: https://chndr-prksh.github.io/pigeonai/
 
+PigeonAI is an open-source scanner and charting site for NSE stocks, named for the carrier
+pigeon that brings the message home: a market breadth page, a screener with 53 scans that can be combined, and a
+chart page for every stock in the Nifty 500.
 
+For information and education only. Not investment advice.
 
-## 🚀 Key Features
+## From a Google Sheet to this
 
-* 📊 Scans **~2000 NSE stocks** in one run
-* 🧮 Computes **popular technical indicators** using Python
-* ☁️ **Auto-syncs results to Google Sheets**
-* 🔍 Easy filtering, sorting, and discovery inside Sheets
-* ⚡ Fully automated & scriptable
-* 🧩 Modular design (add/remove indicators easily)
+This repository started in 2021 as a Python notebook that computed indicator values for
+NSE stocks and pushed them into a Google Sheet, where every scanner was a column. This is
+a complete rewrite: TypeScript, a static website, and the NSE MCP server (launched October
+2026) as the data source. The notebook and the sheet plumbing are gone; they remain in the
+git history.
 
----
+Every scanner column from the sheet is here:
 
-## 📈 Technical Indicators Included
+| Column in the sheet | Scan here |
+|---|---|
+| Volume Boom | Volume boom |
+| Beats 5D Avg Vol! | Beats 5-day average volume |
+| Hulky Gainers/Losers | Hulky gain, Hulky loss |
+| Bullish/Bearish Reversal | Bullish reversal, Bearish reversal |
+| Near 52w H/L | Near 52-week high, Near 52-week low |
+| 52w Breached! | New 52-week high, New 52-week low |
+| 52w Momentum Breach | Strong 52-week high, Strong 52-week low |
+| 3 day streak! | 3-day up streak, 3-day down streak |
+| PV Breakout | PV breakout |
+| 2MPV Breakout | 2-month PV breakout |
+| NR4, NR7 | NR4, NR7 |
+| NR4 Breakout, NR7 Breakout | NR4/NR7 +ve and −ve breakouts |
+| Moving Average Crossovers | Rose above / dropped below SMA 20, Golden cross, Death cross |
+| Price Trend | Six-state trend filter, Bullish stack, Bearish stack |
+| Pivot, S1, S2, R1, R2 | Pivot levels on every stock page and chart |
+| 30-Day Chart | 30-day sparkline in the screener |
 
-The scanner computes a wide range of indicators, including but not limited to:
+The sheet published values, not formulas, so each rule was worked back from the stocks it
+flagged. Where a threshold had to be chosen, the scan's description on the site states it;
+`src/lib/scans.ts` is the single place to change one.
 
-* **Trend Indicators**
+Added on top: trend template, ADX trend strength, RS rating (1–99), reclaimed/lost 200 DMA,
+pullback to 20 EMA, MACD crossovers, RSI extremes, volume surge, highest volume in a year,
+up/down on volume, Bollinger squeeze, wide-range day, inside bar, gaps, bullish engulfing,
+20- and 50-day breakouts, and closes beyond pivot R2/S2.
 
-  * SMA (Simple Moving Average)
-  * EMA (Exponential Moving Average)
-  * MACD
-  * ADX
-
-* **Momentum Indicators**
-
-  * RSI
-  * Stochastic Oscillator
-  * ROC
-
-* **Volatility Indicators**
-
-  * Bollinger Bands
-  * ATR
-
-* **Volume Indicators**
-
-  * Volume SMA / EMA
-  * OBV
-
-*(Indicators can be extended easily based on your strategy.)*
-
----
-
-## 🧠 How It Works
-
-1. Fetches **historical price & volume data** for NSE stocks
-2. Processes data using **Python technical analysis libraries**
-3. Calculates indicators for each stock
-4. Structures results into a clean tabular format
-5. Pushes data to **Google Sheets via API**
-6. Sheet becomes a **live technical scanner dashboard**
-
----
-
-## 📊 Google Sheets Integration
-
-Google Sheets acts as the **front-end UI**:
-
-* Filter stocks by indicator values
-* Sort by RSI, MACD crossover, trend strength, etc.
-* Create watchlists
-* Add conditional formatting
-* Share with teammates
-
-This makes the scanner **non-technical-user friendly** while keeping Python as the backend engine.
-
----
-
-## 🛠️ Tech Stack
-
-* **Python**
-* Pandas / NumPy
-* Technical Analysis libraries (e.g. TA-Lib / pandas-ta)
-* Google Sheets API
-* Google Service Account authentication
-
----
-
-## 📂 Project Structure
+## How it works
 
 ```
-├── data/
-│   └── raw_price_data/
-├── indicators/
-│   ├── trend.py
-│   ├── momentum.py
-│   └── volatility.py
-├── sheets/
-│   └── google_sheets_client.py
-├── scanner.py
-├── config.py
-├── requirements.txt
-└── README.md
+NSE MCP server ──> pipeline/run.ts ──> public/data/*.json ──> static React site
+ (bhavcopy)         adjust, scan         (no backend)          (Lightweight Charts)
 ```
 
----
+There is no server. A scheduled job pulls end-of-day data, adjusts it for splits and
+bonuses, runs every scan and writes JSON; the site is static files that read that JSON.
 
-## ⚙️ Setup Instructions
+- `pipeline/mcp.ts` — a small MCP client (Streamable HTTP), throttled, that stops on HTTP 403.
+- `pipeline/adjust.ts` — split and bonus adjustment (see below).
+- `src/lib/indicators.ts`, `src/lib/scans.ts` — indicators and scan definitions, shared by
+  the pipeline and the charts so the two can never disagree.
+- `src/` — the site: Market, Screener, Watchlist, Stock, About.
 
-### 1️⃣ Clone the Repository
+## Running it
 
 ```bash
-git clone https://github.com/yourusername/nse-stock-scanner.git
-cd nse-stock-scanner
+npm install
+npm run data      # fetch and build the data (first run: about an hour, see below)
+npm run dev       # http://localhost:5183
 ```
 
-### 2️⃣ Install Dependencies
+Pipeline options: `--limit 40`, `--symbols TCS,INFY`, `--offline` (rebuild from the cache
+without network), `--refill` (retry history older than what is cached).
 
-```bash
-pip install -r requirements.txt
-```
+`npm test` runs the adjustment tests. `npm run build` type-checks and builds to `dist/`.
 
-### 3️⃣ Configure Google Sheets API
+## Things worth knowing about the NSE data
 
-* Create a Google Cloud project
-* Enable Google Sheets API
-* Create a Service Account
-* Download credentials JSON
-* Share your target Google Sheet with the service account email
+**Prices are raw.** A 1:1 bonus shows up as a 50% overnight fall. The MCP corporate-actions
+tool only reaches back about a year (RELIANCE's Oct 2024 bonus and BAJFINANCE's Jun 2025
+split and bonus are absent), so it cannot be the only source. `adjust.ts` accepts a feed
+event only when the price actually gapped by that ratio, and separately infers events from
+overnight gaps that no price band allows and that land on a split/bonus ratio. Each stock
+page lists the adjustments applied and where each came from, and the chart can be switched
+to prices as traded.
 
-Update `config.py` with:
+**History has a hole.** As of October 2026 the server returns nothing between 11 Jan 2023
+and 31 Dec 2023. Indicators must not run across a gap, so only the unbroken stretch from
+January 2024 is used. If NSE restores the data, `npm run data -- --refill` picks it up.
 
-* Sheet ID
-* Credentials file path
+**It rate-limits.** Around a thousand calls in ninety seconds earned an HTTP 403 from NSE's
+edge. The client sends at most two requests a second and aborts the run on a 403 instead
+of retrying. The first backfill is about a dozen calls per symbol. After that a daily run
+is roughly a hundred calls: `get_bulk_quote` covers 50 symbols per call, and a quote is
+appended only when its previous close matches the last cached bar.
 
----
+**Terms.** NSE describes the MCP data as for informational and educational purposes. Read
+NSE's terms before using this commercially; redistribution of exchange data normally needs
+a licence.
 
-## ▶️ Running the Scanner
+## Deployment
 
-```bash
-python scanner.py
-```
+`.github/workflows/daily.yml` refreshes the data at 19:30 IST on weekdays and deploys to
+GitHub Pages. The raw price cache lives in the Actions cache, not in git.
 
-Once completed, the Google Sheet will be updated with **latest indicator values for all NSE stocks**.
+## Credits
 
+Charts by [TradingView Lightweight Charts™](https://github.com/tradingview/lightweight-charts)
+(Apache 2.0). Nifty 500 constituents from niftyindices.com. Not affiliated with NSE.
 
-
-## 📌 Use Cases
-
-* Daily technical market scan
-* Swing trading setups
-* Momentum & breakout discovery
-* Portfolio monitoring
-* Building custom trading strategies
-
----
-
-## 🔮 Future Enhancements
-
-* ⏱️ Scheduled runs (cron / Airflow)
-* 📉 Signal generation (Buy/Sell/Neutral)
-* 📬 Alerts via Email / Telegram
-* 🧠 Strategy-based scanners
-* 🌐 Web dashboard (optional)
-
----
-
-## ⚠️ Disclaimer
-
-This project is for **educational and research purposes only**. It does not constitute financial advice. Always do your own research before trading.
-
----
-
-## ⭐ Contributing
-
-Contributions, ideas, and improvements are welcome! Feel free to open an issue or submit a pull request.
-
----
-
-## 📄 License
-
-MIT License.
-
----
-
-If you find this project useful, consider giving it a ⭐ on GitHub!!
+MIT licence.

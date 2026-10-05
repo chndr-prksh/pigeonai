@@ -1,0 +1,67 @@
+name: Refresh data and deploy
+
+on:
+  schedule:
+    # 19:30 IST on trading days, after NSE has published the day's bhavcopy.
+    - cron: '0 14 * * 1-5'
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+      # Raw bars live in the Actions cache, not in git. Each run saves under a new key
+      # and restores the most recent one.
+      - uses: actions/cache/restore@v4
+        with:
+          path: .cache/raw
+          key: nse-raw-${{ github.run_id }}
+          restore-keys: nse-raw-
+
+      # Exit code 2 means NSE started refusing requests part-way. What was fetched is
+      # cached below and the next run resumes; meanwhile publish what the cache holds.
+      # Any other failure fails the job and leaves the previous deployment in place.
+      - name: Refresh data
+        run: |
+          npm run data || { code=$?; [ "$code" -eq 2 ] && npm run data -- --offline; }
+
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: .cache/raw
+          key: nse-raw-${{ github.run_id }}
+
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
