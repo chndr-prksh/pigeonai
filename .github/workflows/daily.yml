@@ -18,9 +18,49 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  # On a push, publish straight away from whatever data is already cached, so a code
+  # change (or the very first deploy) does not wait for the data refresh below.
+  quick-build:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/cache/restore@v4
+        with:
+          path: .cache/raw
+          key: nse-raw-${{ github.run_id }}
+          restore-keys: nse-raw-
+      # pipeline/seed holds a small starter set for when the cache is empty; cached files win.
+      - run: mkdir -p .cache/raw && cp -n pipeline/seed/*.json .cache/raw/ || true
+      - run: npm run data -- --offline
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          name: site-quick
+          path: dist
+
+  quick-deploy:
+    needs: quick-build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          artifact_name: site-quick
+
+  build:
+    needs: quick-deploy
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,6 +77,7 @@ jobs:
           path: .cache/raw
           key: nse-raw-${{ github.run_id }}
           restore-keys: nse-raw-
+      - run: mkdir -p .cache/raw && cp -n pipeline/seed/*.json .cache/raw/ || true
 
       # Exit code 2 means NSE started refusing requests part-way. What was fetched is
       # cached below and the next run resumes; meanwhile publish what the cache holds.
@@ -58,6 +99,7 @@ jobs:
 
   deploy:
     needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
