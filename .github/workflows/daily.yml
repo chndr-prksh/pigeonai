@@ -3,7 +3,11 @@ name: Refresh data and deploy
 on:
   schedule:
     # 19:30 IST on trading days, after NSE has published the day's bhavcopy.
+    # GitHub often starts scheduled runs hours late, which is fine for end-of-day data.
     - cron: '0 14 * * 1-5'
+    # Catch-up at 06:30 IST the next morning, in case the evening run hit an NSE outage
+    # (a 504 on 15 Oct 2026 did exactly that). With nothing new it costs about a dozen calls.
+    - cron: '0 1 * * 2-6'
   workflow_dispatch:
   push:
     branches: [main]
