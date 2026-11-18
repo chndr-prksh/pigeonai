@@ -111,4 +111,4 @@ GitHub Pages. The raw price cache lives in the Actions cache, not in git.
 Charts by [TradingView Lightweight Charts™](https://github.com/tradingview/lightweight-charts)
 (Apache 2.0). Nifty 500 constituents from niftyindices.com. Not affiliated with NSE.
 
-MIT licence.
+MIT licence..
